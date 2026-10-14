@@ -1,7 +1,8 @@
-import torch, pymupdf, os
+import torch, easyocr, pymupdf, os
 from rapidocr import RapidOCR
+from pathlib import Path
 
-# version 0.1.0
+# version 0.2.0
 
 def check_gpu():
     gpu_available = torch.cuda.is_available()
@@ -14,39 +15,55 @@ def check_gpu():
         print('No gpu detected')
         return False
 
+def RapidOCR_i2t(engine, file_path, file_name, output_file_path, test=False):
+    output_doc = pymupdf.open()
+    page_number = -1
+    x1, y1 = 10, 20
+    black = (0,0,0)
+    clean_name = f'{Path(file_name).stem}_result.pdf'
+
+    pix = pymupdf.Pixmap(file_path)
+    width = pix.width
+    height = pix.height
+
+    result = engine(file_path)
+    page = output_doc.new_page(page_number, width, height)
+    page.insert_text((x1,y1), result.txts, fontsize=11, color=black)
+    page = output_doc.new_page(page_number, width, height)
+    
+    # result.boxes = [box1, box2, ...]
+    # box = [[x1,y1], [x2,y2], [x3,y3], [x4,y4]]
+    number_of_text_boxes = len(result.boxes)
+    for box_index in range(number_of_text_boxes):
+        top_left = (box_index, 0)
+        x,y = result.boxes[top_left]
+
+        text = result.txts[box_index]
+        page.insert_text((x,y), text, fontsize=11, color=black)
+        output_doc.save(f"{output_file_path}/{clean_name}")
+
+    if test:
+        result.vis('test.png')
+        print(result.txts)
+    output_doc.close()
 
 def main():
-    engine = RapidOCR()
-    folder_name = 'main/input_files'
-    input_folder = os.listdir(folder_name)
+    input_dir_path = 'image_to_text/input_files'
+    input_dir = os.listdir(input_dir_path)
+    output_dir_path = 'image_to_text/output_files'
 
-    for file_name in input_folder:
-        path_to_file = f"{folder_name}/{file_name}"
+    engine = RapidOCR()
+    for file_name in input_dir:
+        path_to_file = f"{input_dir_path}/{file_name}"
 
         try:
-            output_doc = pymupdf.open()
-            
-            pix = pymupdf.Pixmap(path_to_file)
-            width = pix.width
-            height = pix.height
-            
-            result = engine(path_to_file)
-            page = output_doc.new_page(-1, width, height)
-            number_of_text_boxes = len(result.boxes)
-            for text_box_index in range(number_of_text_boxes):
-                x,y = result.boxes[text_box_index][0]
-                text = result.txts[text_box_index]
-                page.insert_text((x,y), text, fontsize=11, color=(0,0,0))
-            output_doc.save(f'{file_name}_output.pdf')
-            output_doc.close()
+            if file_name.lower() != '.pdf':
+                RapidOCR_i2t(engine, path_to_file, file_name, output_dir_path)
+
+            else:
+                print('PDFs are not supported')
         except Exception as e:
             print(e)
             pass
 
 main()
-
-
-
-
-
-
